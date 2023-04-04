@@ -6,6 +6,7 @@
 #include <string.h>
 #include <vector>
 #include <map>
+#include <bits/stdc++.h>
 
 typedef std::string str;
 
@@ -50,34 +51,23 @@ struct Structure {
 	std::vector < References > _references; // srefs
 	std::vector < Polygon > _polygons; // boundaries, std::vec of std::vec
 	std::vector < Points > complete_xy;
+	bool hasSref = false;
 	bool referenceMask {0}; // if a structure is ever referenced, that means it has no
 	// absolute position, mask would be set to 1. The xy will be added to the sum of the xy
 
-	bool hasSref() {
-		//if _references is size 0 then no
-		//else yes
-		return false;
-	}
-
 };
 
-void expandReferences(Structure s) { // recurrsive as an sref can reference a structure that has references
-/*
-	for (ref : _references) {
-		std_vec <int> updated_pos = getAbsolutePos()
-			add to _polygons
-
-
-			if (reference has a sref) {
-				recurse expandReferences() with the new struct that was found
-			}
-
-
-	}
-	*/
+struct BoundingBox {
+	Points top;
+	Points bottom;
+	Points left;
+	Points right;
 };
+
 	std::vector < Structure > g_Structures;
 	std::map < std::string, int > index_map;
+	BoundingBox WorldSpaceBB;
+
 
 	bool handleStructure(std::istream& in, const char* name) {
 		Structure new_struct{};
@@ -122,6 +112,81 @@ void expandReferences(Structure s) { // recurrsive as an sref can reference a st
 
 	};
 
+	bool expandReferences(std::string name, int x_offset, int y_offset, std::vector<Points>& complete_xy) { // complete_xy stays on the original structure
+		Structure current_structure = g_Structures[index_map[name]];
+
+		//apply the offset to all structures boundaries, then push into complete_xy_pos of structure
+		
+		for (auto i : current_structure._polygons) {
+			for (auto j : i.xy_pos) {
+				j.x += x_offset;
+				j.y += y_offset;
+				complete_xy.push_back(j);
+			}
+		}
+
+
+		if (current_structure.hasSref) {
+		
+			for (int i = 0; i < current_structure._references.size(); i++) {
+				expandReferences(current_structure._references[i].name,
+					(current_structure._references[i].xy.x + x_offset),
+					(current_structure._references[i].xy.y + y_offset),
+					complete_xy); // complete_xy stays the same
+			}
+		}
+		return true;
+
+	};
+
+	bool findMinMaxWorldSpace(Points& top, Points& bottom, Points& left, Points& right) { // at some point need to loop through all structures and get the min and max corners of the absolutes
+		Points current_top = { 0 , INT_MIN };
+		Points current_bottom = { 0, INT_MAX };
+		Points current_left = { INT_MAX, 0};
+		Points current_right = { INT_MIN, 0 }; // though we are only ever checking the x of right and left, and the y of top and bottom
+		for (auto i : g_Structures) {
+				//printf("J::: %d\n", i.complete_xy[0].x);
+			for (auto j : i.complete_xy) {
+				if (j.y > current_top.y) {
+					current_top = j;
+				}
+				if (j.y < current_bottom.y) {
+					current_bottom = j;
+				}
+				if (j.x < current_left.x) {
+					current_left = j;
+				}
+				if (j.x > current_right.x) {
+					current_right = j;
+				}
+			}
+		}
+		top = current_top;
+		bottom = current_bottom;
+		left = current_left;
+		right = current_right;
+
+		return true;
+	}
+
+
+	bool fillPolygons() { // even-odd
+		for (auto& i : g_Structures) {
+			
+		}
+		return true;
+	}
+
+	bool adjustToCorner(int low, int left) { // index requires 0,0,0 at corner, add the world space bottom.y and left.x to all xy in complete_xy
+		for (auto& i : g_Structures) {
+			for (auto& j : i.complete_xy) {
+				j.x += left;
+				j.y += low;
+			}
+		}
+		return true;
+	}
+
 	//bool handleFile(const char* buffer) {
 	bool handleFile() {
 		std::ifstream file("nand2.txt");
@@ -135,15 +200,6 @@ void expandReferences(Structure s) { // recurrsive as an sref can reference a st
 			char key[512];
 
 			in.getline(key, 512, ':');
-/*
-			//in.getline(value, 108, ',');
-			printf("KEY: %s\n", key);
-			file.getline(lineBuffer, 512);
-			std::istringstream temp_stream (lineBuffer);
-			//in2.getline(key2, 108, ':');
-			temp_stream >> key2;
-			printf("KEY2: %s\n", key2);
-*/
 			if (strcmp(key, "STRNAME") == 0) { // then we are beginning a new structure
 				printf("Beginning new Structure\n");
 				char name[512];
@@ -165,15 +221,22 @@ void expandReferences(Structure s) { // recurrsive as an sref can reference a st
 
 					if (strcmp(key, "SNAME") == 0) { // SNAME (reference)
 					printf("\tFound Reference: \n");
+					Points xy{};
+					References ref{};
+
+					new_structure.hasSref = true;
+
+					temp_stream >> ref.name;
+					printf("\tref name: %s", ref.name.data());
+
 					file.getline(lineBuffer, 512); // gets new line into lineBuffer
 					std::istringstream temp_stream_sname(lineBuffer); // make new istringstream on lineBuffer
 					temp_stream_sname.getline(key, 512, ':');
 
-					int x, y;
 					char ctemp1, ctemp2; // this absorbs the ',' after each value
-					temp_stream_sname >> x >> ctemp1 >> y >> ctemp2;
-					Points xy{ x, y };
+					temp_stream_sname >> xy.x >> ctemp1 >> xy.y >> ctemp2; // reference offsets
 					printf("\tpoints: %d, %d\n", xy.x, xy.y);
+					ref.xy = xy;
 
 					
 					}
@@ -214,36 +277,6 @@ void expandReferences(Structure s) { // recurrsive as an sref can reference a st
 
 			}
 
-			/*
-			if (strcmp(key, "LAYER") == 0) {}
-			*/
-			/*
-			if (strcmp(key, "SNAME") == 0) {
-				char name[108];
-
-				in >> name;
-				printf("Found reference: %s\n", name);
-			}
-
-			if (strcmp(key, "XY") == 0) {
-				while (in) {
-					//printf("hello");
-					int temp;
-					char ctemp;
-					in >> temp >> ctemp;
-					values.push_back(temp);
-					//in.getline(currentLine, 512);
-
-					//in >> value;
-				}
-
-				printf("Key: %s, values: ", key);
-				for (auto i : values) {
-					printf("%d ", i);
-				}
-				printf("\n");
-				*/
-				//		}
 		}
 		
 		return true;
@@ -254,27 +287,25 @@ int main(){
 
 	bool res = handleFile();
 	if (!res) { printf("error happened in handleFile"); };
-	/*
-	std::ifstream file("nand2.txt");
-	//file.open("nand2.txt");
-	if (!file) { printf("No File found!\n"); };
-	if (file) { printf("File found!\n"); };
-	std::string cur_line;
 
-	for (int i = 0; i < 50; i++) {
-		char buffer[512];
-		//file.getline(buffer, 512);
-		//printf("%s\n", buffer);
-		//bool res = handleFile(buffer);
-		bool res = handleFile();
-		if (!res) { printf("error happened in handleFile"); };
+	for (int i = 0; i < g_Structures.size(); i++) {
+		res = expandReferences(g_Structures[i]._name, 0, 0, g_Structures[i].complete_xy);
 	}
-*/
+
+	Points bbox_top; // world space
+	Points bbox_bottom;
+	Points bbox_left;
+	Points bbox_right;
+	res = findMinMaxWorldSpace(bbox_top, bbox_bottom, bbox_left, bbox_right);
+
+	printf("world space: top: (%d, %d) bottom: (%d, %d) left: (%d, %d) right: (%d, %d)\n", bbox_top.x, bbox_top.y,
+		bbox_bottom.x, bbox_bottom.y, bbox_left.x, bbox_left.y, bbox_right.x, bbox_right.y);
 	
 	printf("hello world\n");
 
 	printf("size of g_Structures: %ld\n", g_Structures.size());
 
+	// dont forget to adjust all complete_xy by the new origin, recenter
 
 	// stream all info into strucutre vectors, store each structure in a map, store all
 	// referenced strucutres in a serperate buffer
