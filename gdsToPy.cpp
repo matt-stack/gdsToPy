@@ -8,41 +8,40 @@
 #include <map>
 #include <bits/stdc++.h>
 
+//#define DIV 1
+#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114
+
 typedef std::string str;
 
 struct Points {
 	int x, y;
 	int layer;
+
 };
 
 struct References {
 	str name; // have a str "name" / Structure map key/value setup to index into
 	Points xy; // placement
 	std::vector<int> new_placement;
+};
 
+struct BoundingBox {
+	Points top; // for these we only care about y for top and bottom
+	Points bottom;
+	Points left; // and Points.x for left and right
+	Points right;
 
-	int getAbsolutePos(Points pos, std::string name) {
-		//	new_pos = pos + struct
-		//		store in new_placement
-		return 3;
+	void print() {
+		printf("Bounding box: top(%d, %d), bottom(%d, %d), left(%d, %d), right(%d, %d)\n", top.x, top.y,
+			bottom.x, bottom.y, left.x, left.y, right.x, right.y);
 	}
 };
 
 struct Polygon {
 
 	std::vector< Points > xy_pos; // first pair and last pair need to match
-	std::vector< Points > _bounding_box;
-
-
-
-	void fillPoly() {
-		//even - odd alg
-		// 	   uses _bounding_box
-		//reference the edges vec
-		//create bounding box over polygon
-		//check all points in the bounding box against edges
-	}
-
+	BoundingBox _bounding_box;
+	std::vector< Points > _fill;
 };
 
 struct Structure {
@@ -57,60 +56,10 @@ struct Structure {
 
 };
 
-struct BoundingBox {
-	Points top;
-	Points bottom;
-	Points left;
-	Points right;
-};
 
 	std::vector < Structure > g_Structures;
 	std::map < std::string, int > index_map;
 	BoundingBox WorldSpaceBB;
-
-
-	bool handleStructure(std::istream& in, const char* name) {
-		Structure new_struct{};
-		new_struct._name = name;
-		char key[108];
-		std::vector<Points> temp_xy;
-			in.getline(key, 108, ':');
-			printf("key: %s\n", key);
-		//while (strcmp(key, "ENDSTR") != 0) { // until end of structure
-
-			in.getline(key, 108, ':');
-			printf("key: %s\n", key);
-
-			if (strcmp(key, "SNAME") == 0) {
-				char name[108];
-
-				in >> name;
-				printf("Found reference: %s\n", name);
-				in.getline(key, 108, ':');
-
-				if (strcmp(key, "XY") == 0) {
-					while (in) {
-						//printf("hello");
-						int x, y;
-						char ctemp1, ctemp2; // this absorbs the ',' after each value
-						in >> x >> ctemp1 >> y >> ctemp2;
-						Points xy{ x, y };
-						temp_xy.push_back(xy);
-						//in.getline(currentLine, 512);
-
-						//in >> value;
-					}
-				}
-				for (auto i : temp_xy) {
-					printf("point: %d, %d\n", i.x, i.y);
-				}
-
-
-			}
-		//}
-		return true;
-
-	};
 
 	bool expandReferences(std::string name, int x_offset, int y_offset, std::vector<Points>& complete_xy) { // complete_xy stays on the original structure
 		Structure current_structure = g_Structures[index_map[name]];
@@ -169,10 +118,46 @@ struct BoundingBox {
 		return true;
 	}
 
+	bool setBBoxPolys() {
+		for (auto& i : g_Structures) {
+			for (auto& j : i._polygons) {
+				Points current_top = { 0 , INT_MIN };
+				Points current_bottom = { 0, INT_MAX };
+				Points current_left = { INT_MAX, 0 };
+				Points current_right = { INT_MIN, 0 }; // though we are only ever checking the x of right and left, and the y of top and bottom
+				//printf("J::: %d\n", i.complete_xy[0].x);
+				for (auto k : j.xy_pos) {
+					if (k.y > current_top.y) {
+						current_top = k;
+					}
+					if (k.y < current_bottom.y) {
+						current_bottom = k;
+					}
+					if (k.x < current_left.x) {
+						current_left = k;
+					}
+					if (k.x > current_right.x) {
+						current_right = k;
+					}
+				}
+
+				j._bounding_box.top = current_top;
+				j._bounding_box.bottom = current_bottom;
+				j._bounding_box.left= current_left;
+				j._bounding_box.right = current_right;
+				j._bounding_box.print();
+				
+			}
+		}
+		return true;
+	}
+
 
 	bool fillPolygons() { // even-odd
+
 		for (auto& i : g_Structures) {
-			
+			//creating new Points, dont forget the layers
+
 		}
 		return true;
 	}
@@ -180,7 +165,7 @@ struct BoundingBox {
 	bool adjustToCorner(int low, int left) { // index requires 0,0,0 at corner, add the world space bottom.y and left.x to all xy in complete_xy
 		for (auto& i : g_Structures) {
 			for (auto& j : i.complete_xy) {
-				j.x += left;
+				j.x += left; // offsets to corner
 				j.y += low;
 			}
 		}
@@ -235,6 +220,8 @@ struct BoundingBox {
 
 					char ctemp1, ctemp2; // this absorbs the ',' after each value
 					temp_stream_sname >> xy.x >> ctemp1 >> xy.y >> ctemp2; // reference offsets
+					xy.x /= DIV;
+					xy.y /= DIV;
 					printf("\tpoints: %d, %d\n", xy.x, xy.y);
 					ref.xy = xy;
 
@@ -263,6 +250,8 @@ struct BoundingBox {
 						while (temp_stream_xy) {
 							char ctemp1, ctemp2;
 							temp_stream_xy >> xy.x >> ctemp1 >> xy.y >> ctemp2;
+							xy.x /= DIV;
+							xy.y /= DIV;
 							g_Structures[struct_index]._polygons[poly_index].xy_pos.push_back(xy);
 						}
 					}
@@ -292,18 +281,21 @@ int main(){
 		res = expandReferences(g_Structures[i]._name, 0, 0, g_Structures[i].complete_xy);
 	}
 
-	Points bbox_top; // world space
-	Points bbox_bottom;
-	Points bbox_left;
-	Points bbox_right;
-	res = findMinMaxWorldSpace(bbox_top, bbox_bottom, bbox_left, bbox_right);
+	//res = findMinMaxWorldSpace(bbox_top, bbox_bottom, bbox_left, bbox_right);
+	res = findMinMaxWorldSpace(WorldSpaceBB.top, WorldSpaceBB.bottom, WorldSpaceBB.left, WorldSpaceBB.right);
 
-	printf("world space: top: (%d, %d) bottom: (%d, %d) left: (%d, %d) right: (%d, %d)\n", bbox_top.x, bbox_top.y,
-		bbox_bottom.x, bbox_bottom.y, bbox_left.x, bbox_left.y, bbox_right.x, bbox_right.y);
+	printf("world space: top: (%d, %d) bottom: (%d, %d) left: (%d, %d) right: (%d, %d)\n", WorldSpaceBB.top.x, WorldSpaceBB.top.y,
+		WorldSpaceBB.bottom.x, WorldSpaceBB.bottom.y, WorldSpaceBB.left.x, WorldSpaceBB.left.y, WorldSpaceBB.right.x, WorldSpaceBB.right.y);
 	
 	printf("hello world\n");
 
 	printf("size of g_Structures: %ld\n", g_Structures.size());
+
+	res = setBBoxPolys();
+
+	res = fillPolygons();
+
+	// THEN add the fill to world space and the strucutres complete_xy
 
 	// dont forget to adjust all complete_xy by the new origin, recenter
 
