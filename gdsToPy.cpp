@@ -9,10 +9,10 @@
 #include <bits/stdc++.h>
 
 //#define DIV 1
-#define DIV 1 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
 
-//std::string myFile{ "nand2.txt" };
-std::string myFile{ "myexample.txt" };
+std::string myFile{ "nand2.txt" };
+//std::string myFile{ "myexample.txt" };
 
 typedef std::string str;
 
@@ -53,16 +53,19 @@ struct Structure {
 	std::vector < References > _references; // srefs
 	std::vector < Polygon > _polygons; // boundaries, std::vec of std::vec
 	std::vector < Points > complete_xy;
-	bool hasSref = false;
-	bool referenceMask {0}; // if a structure is ever referenced, that means it has no
+	bool hasSref{ false };
+	bool referenceMask {false}; // if a structure is ever referenced, that means it has no
 	// absolute position, mask would be set to 1. The xy will be added to the sum of the xy
 
 };
 
-
+	// globals
 	std::vector < Structure > g_Structures;
 	std::map < std::string, int > index_map;
 	BoundingBox WorldSpaceBB;
+	int g_lowest_layer = INT_MAX;
+	int g_highest_layer = INT_MIN;
+	std::vector< std::vector < int > > g_World;
 
 	bool expandReferences(std::string name, int x_offset, int y_offset, std::vector<Points>& complete_xy) { // complete_xy stays on the original structure
 		Structure current_structure = g_Structures[index_map[name]];
@@ -70,7 +73,8 @@ struct Structure {
 		//apply the offset to all structures boundaries, then push into complete_xy_pos of structure
 		
 		for (auto i : current_structure._polygons) {
-			for (auto j : i.xy_pos) {
+			//for (auto j : i.xy_pos) {
+			for (auto j : i._fill) {
 				j.x += x_offset;
 				j.y += y_offset;
 				complete_xy.push_back(j);
@@ -189,25 +193,20 @@ struct Structure {
 
 		for (auto& i : g_Structures) {
 			for (auto& j : i._polygons) {
-				//creating new Points, dont forget the layers
 				Points pos{};
 				pos.x = j._bounding_box.left.x;
 				pos.y = j._bounding_box.bottom.y;
-				//if (i._name == "\"via\"") {
 					for (; pos.y <= j._bounding_box.top.y; pos.y++) {
 						for (; pos.x <= j._bounding_box.right.x; pos.x++) { // honestly could have a jump of 10 for less looping
-							//printf("pos checking beans: (%d, %d)\n", pos.x, pos.y);
 							if (evenOdd(pos, j.xy_pos)) {
 								// add to _fill of the polygon
+								pos.layer = j.xy_pos[0].layer; // copy layer of first point in polygon
 								j._fill.push_back(pos);
-								printf("fill: (%d, %d)\n", pos.x, pos.y);
+								//printf("fill: (%d, %d)\n", pos.x, pos.y);
 							}
 						}
 						pos.x = j._bounding_box.left.x; // RESET X BACK TO LEFT
-					//	printf("pos.y: %d", pos.y);
 					}
-			//	}
-
 			}
 
 		}
@@ -215,13 +214,33 @@ struct Structure {
 	}
 
 	bool adjustToCorner(int low, int left) { // index requires 0,0,0 at corner, add the world space bottom.y and left.x to all xy in complete_xy
+		if (low > 0 && left > 0) { // all xy are positive, need to subtract to get to origin
+			low *= -1;
+			left *= -1;
+		}
+		if (low > 0 && left < 0) { // left is negative
+			low *= -1;
+			left *= 1;
+		}
+		if (low < 0 && left > 0) { // low is negative
+			low *= 1;
+			left *= -1;
+		}
+		if (low < 0 && left < 0) { // both are negative
+			low *= 1;
+			left *= 1;
+		}
 		for (auto& i : g_Structures) {
 			for (auto& j : i.complete_xy) {
-				j.x += left; // offsets to corner
-				j.y += low;
+				j.x -= left; // offsets to corner
+				j.y -= low;
 			}
 		}
 		return true;
+	}
+
+	bool setTheWorldVector() {
+	
 	}
 
 	//bool handleFile(const char* buffer) {
@@ -266,6 +285,8 @@ struct Structure {
 					temp_stream >> ref.name;
 					printf("\tref name: %s", ref.name.data());
 
+					g_Structures[index_map[ref.name]].referenceMask = true; // if a structure is reference, mask is true
+
 					file.getline(lineBuffer, 512); // gets new line into lineBuffer
 					std::istringstream temp_stream_sname(lineBuffer); // make new istringstream on lineBuffer
 					temp_stream_sname.getline(key, 512, ':');
@@ -291,6 +312,14 @@ struct Structure {
 
 					temp_stream_boundary >> xy.layer;
 					printf("\tlayer: %d\n", xy.layer);
+
+					// set lowest and highest layers
+					if (xy.layer < g_lowest_layer) {
+						g_lowest_layer = xy.layer;
+					}
+					if (xy.layer > g_highest_layer) {
+						g_highest_layer = xy.layer;
+					}
 
 					file.getline(lineBuffer, 512); // skipping the datatype line
 
@@ -329,6 +358,10 @@ int main(){
 	bool res = handleFile();
 	if (!res) { printf("error happened in handleFile"); };
 
+	res = setBBoxPolys();
+
+	res = fillPolygons();
+
 	for (int i = 0; i < g_Structures.size(); i++) {
 		res = expandReferences(g_Structures[i]._name, 0, 0, g_Structures[i].complete_xy);
 	}
@@ -343,9 +376,38 @@ int main(){
 
 	printf("size of g_Structures: %ld\n", g_Structures.size());
 
-	res = setBBoxPolys();
+//	res = setBBoxPolys(); // moving these up
 
-	res = fillPolygons();
+//	res = fillPolygons();
+
+// check reference masks are correct
+	for (auto i : g_Structures) {
+		printf("%s, reference mask %d\n", i._name.data(), i.referenceMask);
+	}
+
+	printf("lowerest layer: %d\n", g_lowest_layer);
+	printf("higherest layer: %d\n", g_highest_layer);
+
+	res = adjustToCorner(WorldSpaceBB.bottom.y, WorldSpaceBB.left.x);
+
+	BoundingBox testBB;
+
+	res = findMinMaxWorldSpace(testBB.top, testBB.bottom, testBB.left, testBB.right);
+
+	printf("test space post adjust: top: (%d, %d) bottom: (%d, %d) left: (%d, %d) right: (%d, %d)\n", testBB.top.x, testBB.top.y,
+		testBB.bottom.x, testBB.bottom.y, testBB.left.x, testBB.left.y, testBB.right.x, testBB.right.y);
+
+	res = setTheWorldVector();
+
+	/*
+	remaining items:
+	set the lowest layer
+	set a fill to the gorund layer for reference, world space bounding box size, lowest layer
+	offset to edge
+
+	final: go through every strucutres complete_xy and map into the world 2d vector, 1 if present and !
+
+	*/
 
 	// THEN add the fill to world space and the strucutres complete_xy
 
