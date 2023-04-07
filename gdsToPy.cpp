@@ -9,7 +9,10 @@
 #include <bits/stdc++.h>
 
 //#define DIV 1
-#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114
+#define DIV 1 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+
+//std::string myFile{ "nand2.txt" };
+std::string myFile{ "myexample.txt" };
 
 typedef std::string str;
 
@@ -153,10 +156,59 @@ struct Structure {
 	}
 
 
+	bool evenOdd(Points	pcheck, std::vector< Points > poly_points) { // true if in corner, on boundary, or inside, else false
+		bool res = false;
+		for (int i = 0; i < poly_points.size() - 1; i++) { // number of edges of a poly is -1 then points
+			Points edge_start = poly_points[i];
+			Points edge_end = poly_points[i+1];
+			if ((pcheck.x == edge_end.x) && (pcheck.y == edge_end.y)) { // corner
+				//printf("corner\n");
+				return true;
+			}
+			if ((edge_start.y > pcheck.y) != (edge_end.y > pcheck.y)) {
+				//printf("edge\n");
+				//int slope = ((pcheck.x - edge_end.x) * (edge_start.y - edge_end.y) - (edge_start.x - edge_end.x) * (pcheck.y - edge_end.y));
+				int slope = ((pcheck.x - edge_end.x) * (edge_start.y - edge_end.y) - (edge_start.x - edge_end.x) * (pcheck.y - edge_end.y));
+				//printf("pcheck: (%d, %d), edge_start: (%d, %d), edge_end(%d, %d) \n", pcheck.x, pcheck.y, edge_start.x, edge_start.y, edge_end.x, edge_end.y);
+				//printf("slope: %d\n", slope);
+				if (slope == 0) { // horizontal
+					//printf("slope check: (%d, %d)\n", pcheck.x, pcheck.y);
+					return true;
+				}
+				if ((slope < 0) != (edge_start.y < edge_end.y)) {
+
+					res = !res;
+				}
+			}
+		}
+
+		return res;
+	}
+
 	bool fillPolygons() { // even-odd
 
 		for (auto& i : g_Structures) {
-			//creating new Points, dont forget the layers
+			for (auto& j : i._polygons) {
+				//creating new Points, dont forget the layers
+				Points pos{};
+				pos.x = j._bounding_box.left.x;
+				pos.y = j._bounding_box.bottom.y;
+				//if (i._name == "\"via\"") {
+					for (; pos.y <= j._bounding_box.top.y; pos.y++) {
+						for (; pos.x <= j._bounding_box.right.x; pos.x++) { // honestly could have a jump of 10 for less looping
+							//printf("pos checking beans: (%d, %d)\n", pos.x, pos.y);
+							if (evenOdd(pos, j.xy_pos)) {
+								// add to _fill of the polygon
+								j._fill.push_back(pos);
+								printf("fill: (%d, %d)\n", pos.x, pos.y);
+							}
+						}
+						pos.x = j._bounding_box.left.x; // RESET X BACK TO LEFT
+					//	printf("pos.y: %d", pos.y);
+					}
+			//	}
+
+			}
 
 		}
 		return true;
@@ -174,7 +226,7 @@ struct Structure {
 
 	//bool handleFile(const char* buffer) {
 	bool handleFile() {
-		std::ifstream file("nand2.txt");
+		std::ifstream file(myFile);
 		if (!file) { printf("No File found!\n"); };
 		if (file) { printf("File found!\n"); };
 		char buffer[512];
