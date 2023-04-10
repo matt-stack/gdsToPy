@@ -65,7 +65,6 @@ struct Structure {
 	BoundingBox WorldSpaceBB;
 	int g_lowest_layer = INT_MAX;
 	int g_highest_layer = INT_MIN;
-	std::vector< std::vector < int > > g_World;
 
 	bool expandReferences(std::string name, int x_offset, int y_offset, std::vector<Points>& complete_xy) { // complete_xy stays on the original structure
 		Structure current_structure = g_Structures[index_map[name]];
@@ -77,7 +76,7 @@ struct Structure {
 			for (auto j : i._fill) {
 				j.x += x_offset;
 				j.y += y_offset;
-				complete_xy.push_back(j);
+				complete_xy.push_back(j); // this fills the complete_xy
 			}
 		}
 
@@ -239,8 +238,16 @@ struct Structure {
 		return true;
 	}
 
-	bool setTheWorldVector() {
-	
+	bool setTheWorldVector(std::vector<std::vector<std::vector<int>>>& world) {
+		for (auto i : g_Structures) {
+			if (i.referenceMask != 1) {
+				for (auto j : i.complete_xy) {
+					world[j.x][j.y][j.layer] = j.layer;
+					//world[0][0][0] = 0;
+				}
+			}
+		}
+		return true;
 	}
 
 	//bool handleFile(const char* buffer) {
@@ -390,14 +397,31 @@ int main(){
 
 	res = adjustToCorner(WorldSpaceBB.bottom.y, WorldSpaceBB.left.x);
 
-	BoundingBox testBB;
+	BoundingBox adjustedBB;
 
-	res = findMinMaxWorldSpace(testBB.top, testBB.bottom, testBB.left, testBB.right);
+	res = findMinMaxWorldSpace(adjustedBB.top, adjustedBB.bottom, adjustedBB.left, adjustedBB.right);
 
-	printf("test space post adjust: top: (%d, %d) bottom: (%d, %d) left: (%d, %d) right: (%d, %d)\n", testBB.top.x, testBB.top.y,
-		testBB.bottom.x, testBB.bottom.y, testBB.left.x, testBB.left.y, testBB.right.x, testBB.right.y);
+	printf("adjusted space post adjust: top: (%d, %d) bottom: (%d, %d) left: (%d, %d) right: (%d, %d)\n", adjustedBB.top.x, adjustedBB.top.y,
+		adjustedBB.bottom.x, adjustedBB.bottom.y, adjustedBB.left.x, adjustedBB.left.y, adjustedBB.right.x, adjustedBB.right.y);
 
-	res = setTheWorldVector();
+	//x size = worldspaceBB.right.x
+	//y size = worldspaceBB.top.y
+	//z size = highest layer 
+	int x = adjustedBB.right.x+1;
+	int y = adjustedBB.top.y+1;
+	int z = g_highest_layer+1;
+	printf("size of world: %d, %d, %d\n", x, y, z);
+	std::vector < std::vector< std::vector < int > > > world (x, std::vector<std::vector<int>>(y, std::vector<int>(z)));
+
+	res = setTheWorldVector(world);
+
+	printf("Done!\n");
+
+
+	// then go through each structures fill, and each the world with
+	// world[x] = layer // no x offset, starts a 0
+	// world[y+y_offset] = layer;
+	// world[layer+layer_offset] = layer;
 
 	/*
 	remaining items:
