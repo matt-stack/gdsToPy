@@ -8,11 +8,11 @@
 #include <map>
 #include <bits/stdc++.h>
 
-//#define DIV 1
-#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+#define DIV 1
+//#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
 
-std::string myFile{ "nand2.txt" };
-//std::string myFile{ "myexample.txt" };
+//std::string myFile{ "nand2.txt" };
+std::string myFile{ "myexample.txt" };
 
 typedef std::string str;
 
@@ -238,17 +238,6 @@ struct Structure {
 		return true;
 	}
 
-	bool setTheWorldVector(std::vector<std::vector<std::vector<int>>>& world) {
-		for (auto i : g_Structures) {
-			if (i.referenceMask != 1) {
-				for (auto j : i.complete_xy) {
-					world[j.x][j.y][j.layer] = j.layer;
-					//world[0][0][0] = 0;
-				}
-			}
-		}
-		return true;
-	}
 
 	//bool handleFile(const char* buffer) {
 	bool handleFile() {
@@ -360,6 +349,49 @@ struct Structure {
 
 	};
 
+	bool setTheWorldVector(std::vector<std::vector<std::vector<int>>>& world, int u, int v) {
+		// set the base
+		for (int i = 0; i < u; i++) {
+			for (int j = 0; j < v; j++) {
+				//world[i][j][0] = 300;
+			}
+		}
+
+		for (auto i : g_Structures) {
+			if (i.referenceMask != 1) {
+				printf("setting world vector\n");
+				for (auto j : i.complete_xy) {
+					//world[j.x][j.y][j.layer] = j.layer;
+				//	printf("%d\n", j.layer);
+					world[j.layer][j.y][j.x] = j.layer;
+				}
+			}
+		}
+		return true;
+	}
+
+	bool printToFile(const std::vector<std::vector<std::vector<int>>>& world) {
+		// need to jump around vectors, say goodbye to caching
+		for (int o = 0; o < world.size(); o++) {
+			//printf("%ld\n", world[0][0].size());
+			std::string filename {"fileout_"};
+			filename += std::to_string(o);
+			filename += ".txt";
+			std::ofstream levelfile(filename);
+			//for (int i = 0; i < world[0].size(); i++) {
+			for (int j = 0; j < world[0].size(); j++) { // constant size
+				for (int i = 0; i < world[0][0].size(); i++) {
+					//printf("world sizes: %ld, %ld, %ld\n", world.size(), world[0].size(), world[0][0].size());
+					levelfile << world[o][j][i] << " ";
+				}
+				levelfile << "\n";
+			}
+
+			levelfile.close();
+		}
+		return true;
+	}
+
 int main(){
 
 	bool res = handleFile();
@@ -411,9 +443,12 @@ int main(){
 	int y = adjustedBB.top.y+1;
 	int z = g_highest_layer+1;
 	printf("size of world: %d, %d, %d\n", x, y, z);
-	std::vector < std::vector< std::vector < int > > > world (x, std::vector<std::vector<int>>(y, std::vector<int>(z)));
+	//std::vector < std::vector< std::vector < int > > > world (x, std::vector<std::vector<int>>(y, std::vector<int>(z)));
+	std::vector < std::vector< std::vector < int > > > world (z, std::vector<std::vector<int>>(y, std::vector<int>(x)));
 
-	res = setTheWorldVector(world);
+	res = setTheWorldVector(world, x, y);
+
+	res = printToFile(world);
 
 	printf("Done!\n");
 
