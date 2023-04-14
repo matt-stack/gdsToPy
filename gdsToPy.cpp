@@ -9,12 +9,12 @@
 #include <bits/stdc++.h>
 #include <stdlib.h>
 
-#define DIV 1
-//#define DIV 1000 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+//#define DIV 1
+#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
 
-//std::string myFile{ "nand2.txt" };
+std::string myFile{ "nand2.txt" };
 //std::string myFile{ "myexample.txt" };
-std::string myFile{ "myexamplebox.txt" };
+//std::string myFile{ "myexamplebox.txt" };
 
 typedef std::string str;
 
@@ -237,6 +237,26 @@ struct Structure {
 		return true;
 	}
 
+	bool darkenEdge() {
+		for (auto& i : g_Structures) {
+			for (auto& j : i._polygons) {
+				for (auto& k : j._fill) {
+					if ((k.x == j._bounding_box.left.x) ||
+						(k.x == j._bounding_box.right.x) ||
+						(k.y == j._bounding_box.top.y) ||
+						(k.y == j._bounding_box.bottom.y)) {
+						// on bounding box, yes edge
+						k.onEdge = true;
+					}
+					//else if ((k+1).x == 0) {
+						
+					//}
+				}
+			}
+		}
+		return true;
+	}
+
 	bool adjustToCorner(int low, int left) { // index requires 0,0,0 at corner, add the world space bottom.y and left.x to all xy in complete_xy
 		if (low > 0 && left > 0) { // all xy are positive, need to subtract to get to origin
 			low *= -1;
@@ -391,11 +411,11 @@ struct Structure {
 				int random = rand() % 1000 + 100;
 				for (auto j : i.complete_xy) {
 					if (j.onEdge) {
-						world[j.layer][j.y][j.x] = j.layer * 1000; // make edges extra visible
+						world[j.layer][j.y][j.x] = j.layer * 2 +500; // make edges extra visible
 					}
 					else {
 						//world[j.layer][j.y][j.x] = j.layer;
-						world[j.layer][j.y][j.x] = j.layer * 10;
+						world[j.layer][j.y][j.x] = j.layer * 2;
 					}
 				}
 			}
@@ -434,6 +454,8 @@ int main(){
 
 	res = fillPolygons();
 
+//	res = darkenEdges(); still working on this
+
 	for (int i = 0; i < g_Structures.size(); i++) {
 		res = expandReferences(g_Structures[i]._name, 0, 0, g_Structures[i].complete_xy);
 	}
@@ -447,10 +469,6 @@ int main(){
 	printf("hello world\n");
 
 	printf("size of g_Structures: %ld\n", g_Structures.size());
-
-//	res = setBBoxPolys(); // moving these up
-
-//	res = fillPolygons();
 
 // check reference masks are correct
 	for (auto i : g_Structures) {

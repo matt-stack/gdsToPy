@@ -1,25 +1,31 @@
 import numpy as np
 import random
+import sys
 
 # processing flags
 EXPORT = True
 
 print(' * start processin ... *')
 
+LAYERSIZE = 10
+
 # volume dimensions
-dx = 5
-dy = 6
-dz = 7
+#1511, 1671, 163
+dx = 1511
+dy = 1671
+#dz = (163*LAYERSIZE)
+dz = 163
 
 # define export type
 export_type = 'uint16'
 
 # data array export to binary file
-#export_folder = "Z:/nvindex/incoming/AD102_NV_Sci_gds/sample-raw/"
-#export_filename = export_folder + "export_boxes_"+str(dz)+"x"+str(dy)+"x"+str(dx)+"_"+export_type+".raw"
+#export_folder = "Z:/h/bigdata1/nvindex/incoming/AD102_NV_Sci_gds/gdsConverter/"
+export_folder = "/h/bigdata1/nvindex/incoming/AD102_NV_Sci_gds/gdsConverter/"
+export_filename = export_folder + "gds_test"+str(dz)+"x"+str(dy)+"x"+str(dx)+"_"+export_type+".raw"
 
 # convert arrays
-volume_data = np.zeros((dx,dy,dz))
+volume_data = np.zeros((dz,dy,dx))
 
 # generate some artificial boxes
 num_boxes   = 5
@@ -29,34 +35,26 @@ max_height  = 7
 min_height  = 2
 max_value   = 10
 
-# write the first layers
-volume_data[:, :, 0:min_height] = max_value
+np.set_printoptions(threshold=sys.maxsize)
+
+# Text file data converted to integer data type
+for x in range(1, 163): # I dont know if you can use 0 as a layer in GDS, but change this if you can
+	filename_previous = "fileout_%d.txt" % (x-1)
+	temp = np.zeros((dz, dy, dx))
+	temp = np.loadtxt(filename_previous, dtype=int)
+	filename = "fileout_%d.txt" % x
+	volume_data[x][:][:] = np.loadtxt(filename, dtype=int)
+	res = np.maximum(temp, volume_data)
+
+res[0:1][:][:] = 2000
+#print(volume_data[49])
 
 print(' - generating volume with '+str(dx)+' x '+str(dy)+' x '+str(dz)+' entries and '+str(num_boxes)+' boxes: ')
-for x in range(num_boxes):
-  
-    # generate random positions
-    px = int(random.random() * (dx-min_size))
-    py = int(random.random() * (dy-min_size))
-
-    # generate random sizes
-    sx = int(min(min_size + random.random() * (max_size-1), dx-1))
-    sy = int(min(min_size + random.random() * (max_size-1), dy-1))
-    sz = int(min(min_size + random.random() * (max_height-1), dz-1))
-
-    # generate some label
-    label = int(random.random() * max_value)
-
-    # write data to volume
-    volume_data[px:(px+sx), py:(py+sy), min_height:sz] = label
-    print('  - creating box '+str(x)+' with label ' + str(label))
 
 if EXPORT:
-    volume_data[0, 2, 1] = 500
-    print(volume_data);
     # export to file
-   # print('  - exporting volume ... ')
-   # volume_data.astype(export_type).tofile(export_filename)
-   # print('  - saved array to: ' + export_filename)
+    print('  - exporting volume ... ')
+    res.astype(export_type).tofile(export_filename)
+    print('  - saved array to: ' + export_filename)
 
 print(' * finished processing! *')
