@@ -7,18 +7,21 @@
 #include <vector>
 #include <map>
 #include <bits/stdc++.h>
+#include <stdlib.h>
 
 #define DIV 1
-//#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+//#define DIV 1000 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
 
 //std::string myFile{ "nand2.txt" };
-std::string myFile{ "myexample.txt" };
+//std::string myFile{ "myexample.txt" };
+std::string myFile{ "myexamplebox.txt" };
 
 typedef std::string str;
 
 struct Points {
 	int x, y;
 	int layer;
+	bool onEdge = false;
 
 };
 
@@ -78,12 +81,22 @@ struct Structure {
 				j.y += y_offset;
 				complete_xy.push_back(j); // this fills the complete_xy
 			}
+
 		}
 
+			//	if (name == "\"abc2\"") {
+			//		printf("HELLLLOOOO\n");
+			//	}
 
 		if (current_structure.hasSref) {
+			if (name == "\"abc2\"") {
+				printf("HELLLLOOOO\n");
+			}
 		
 			for (int i = 0; i < current_structure._references.size(); i++) {
+				if (name == "\"abc2\"") {
+					printf("printing structure: %s\n", current_structure._name.data());
+				}
 				expandReferences(current_structure._references[i].name,
 					(current_structure._references[i].xy.x + x_offset),
 					(current_structure._references[i].xy.y + y_offset),
@@ -158,14 +171,16 @@ struct Structure {
 		return true;
 	}
 
-
-	bool evenOdd(Points	pcheck, std::vector< Points > poly_points) { // true if in corner, on boundary, or inside, else false
+// having a bool return and a bool hidden return is bad design but..
+	bool evenOdd(Points	pcheck, std::vector< Points > poly_points, bool& onEdge) { // true if in corner, on boundary, or inside, else false
 		bool res = false;
 		for (int i = 0; i < poly_points.size() - 1; i++) { // number of edges of a poly is -1 then points
 			Points edge_start = poly_points[i];
 			Points edge_end = poly_points[i+1];
 			if ((pcheck.x == edge_end.x) && (pcheck.y == edge_end.y)) { // corner
 				//printf("corner\n");
+				printf("ON CORNER!: %d, %d\n", pcheck.x, pcheck.y);
+				onEdge = true;
 				return true;
 			}
 			if ((edge_start.y > pcheck.y) != (edge_end.y > pcheck.y)) {
@@ -174,14 +189,22 @@ struct Structure {
 				int slope = ((pcheck.x - edge_end.x) * (edge_start.y - edge_end.y) - (edge_start.x - edge_end.x) * (pcheck.y - edge_end.y));
 				//printf("pcheck: (%d, %d), edge_start: (%d, %d), edge_end(%d, %d) \n", pcheck.x, pcheck.y, edge_start.x, edge_start.y, edge_end.x, edge_end.y);
 				//printf("slope: %d\n", slope);
-				if (slope == 0) { // horizontal
-					//printf("slope check: (%d, %d)\n", pcheck.x, pcheck.y);
+				if (slope == 0) { // edge, horizontal
+					//printf("slope check: (%d, %d)\n", pcheck.x, pcheck.y);A
+					printf("ON EDGE!: %d, %d\n", pcheck.x, pcheck.y);
+					onEdge = true;
 					return true;
 				}
 				if ((slope < 0) != (edge_start.y < edge_end.y)) {
 
 					res = !res;
 				}
+			}
+			if ((((edge_end.x <= pcheck.x)  && (pcheck.x <= edge_start.x)) || ((edge_start.x <= pcheck.x) && (pcheck.x <= edge_end.x))) && (edge_end.y == pcheck.y) && (pcheck.y == edge_start.y)) {
+				printf("ON H EDGE!: pcheck (%d, %d), edge_start (%d, %d), edge_end (%d, %d)\n", pcheck.x, pcheck.y, edge_start.x, edge_start.y, edge_end.x, edge_end.y);
+				onEdge = true;
+				return true;
+
 			}
 		}
 
@@ -194,12 +217,14 @@ struct Structure {
 			for (auto& j : i._polygons) {
 				Points pos{};
 				pos.x = j._bounding_box.left.x;
-				pos.y = j._bounding_box.bottom.y;
+				pos.y = j._bounding_box.bottom.y; // + and - 1 for room to breath
 					for (; pos.y <= j._bounding_box.top.y; pos.y++) {
-						for (; pos.x <= j._bounding_box.right.x; pos.x++) { // honestly could have a jump of 10 for less looping
-							if (evenOdd(pos, j.xy_pos)) {
+						for (; pos.x <= j._bounding_box.right.x; pos.x++) { // honestly could have a jump of 10 for less loopingA
+							bool onEdge = false;
+							if (evenOdd(pos, j.xy_pos, onEdge)) {
 								// add to _fill of the polygon
 								pos.layer = j.xy_pos[0].layer; // copy layer of first point in polygon
+								pos.onEdge = onEdge;
 								j._fill.push_back(pos);
 								//printf("fill: (%d, %d)\n", pos.x, pos.y);
 							}
@@ -276,7 +301,7 @@ struct Structure {
 					Points xy{};
 					References ref{};
 
-					new_structure.hasSref = true;
+					g_Structures[struct_index].hasSref = true;
 
 					temp_stream >> ref.name;
 					printf("\tref name: %s", ref.name.data());
@@ -293,6 +318,8 @@ struct Structure {
 					xy.y /= DIV;
 					printf("\tpoints: %d, %d\n", xy.x, xy.y);
 					ref.xy = xy;
+
+					g_Structures[struct_index]._references.push_back(ref);
 
 					
 					}
@@ -329,6 +356,7 @@ struct Structure {
 							temp_stream_xy >> xy.x >> ctemp1 >> xy.y >> ctemp2;
 							xy.x /= DIV;
 							xy.y /= DIV;
+							xy.onEdge = true; // this gets overwritten by fill :(
 							g_Structures[struct_index]._polygons[poly_index].xy_pos.push_back(xy);
 						}
 					}
@@ -360,10 +388,15 @@ struct Structure {
 		for (auto i : g_Structures) {
 			if (i.referenceMask != 1) {
 				printf("setting world vector\n");
+				int random = rand() % 1000 + 100;
 				for (auto j : i.complete_xy) {
-					//world[j.x][j.y][j.layer] = j.layer;
-				//	printf("%d\n", j.layer);
-					world[j.layer][j.y][j.x] = j.layer;
+					if (j.onEdge) {
+						world[j.layer][j.y][j.x] = j.layer * 1000; // make edges extra visible
+					}
+					else {
+						//world[j.layer][j.y][j.x] = j.layer;
+						world[j.layer][j.y][j.x] = j.layer * 10;
+					}
 				}
 			}
 		}
