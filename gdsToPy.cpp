@@ -8,13 +8,16 @@
 #include <map>
 #include <bits/stdc++.h>
 #include <stdlib.h>
+#include <cmath>
 
-//#define DIV 1
-#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+#define DIV 1
+//#define DIV 100 // this sets the precision! 1 is full, 100 is a good compremise: 7500, 11400 => 75, 114A
+#define DEBUG 1
 
-std::string myFile{ "nand2.txt" };
+//std::string myFile{ "nand2.txt" };
+//std::string myFile{ "UniExample/UniExample.txt" };
 //std::string myFile{ "myexample.txt" };
-//std::string myFile{ "myexamplebox.txt" };
+std::string myFile{ "myexamplebox.txt" };
 
 typedef std::string str;
 
@@ -23,6 +26,15 @@ struct Points {
 	int layer;
 	bool onEdge = false;
 
+};
+
+struct Path {
+
+	//int _layer; layer is found in _xy[0].layer (assuming its not zero size)
+	int _pathtype;
+	int _width;
+	std::vector <Points> _fill;
+	std::vector < Points> _xy; // relative xy
 };
 
 struct References {
@@ -55,12 +67,14 @@ struct Structure {
 	std::string _name;
 	std::vector < References > _references; // srefs
 	std::vector < Polygon > _polygons; // boundaries, std::vec of std::vec
+	std::vector < Path > _paths;
 	std::vector < Points > complete_xy;
 	bool hasSref{ false };
 	bool referenceMask {false}; // if a structure is ever referenced, that means it has no
 	// absolute position, mask would be set to 1. The xy will be added to the sum of the xy
 
 };
+
 
 	// globals
 	std::vector < Structure > g_Structures;
@@ -81,7 +95,18 @@ struct Structure {
 				j.y += y_offset;
 				complete_xy.push_back(j); // this fills the complete_xy
 			}
+		}
 
+		for (auto i : current_structure._paths) {
+			printf("\tHello?\n");
+			for (auto j : i._fill) {
+			printf("\tyes\n");
+				j.x += x_offset;
+				j.y += y_offset;
+				complete_xy.push_back(j); // this fills the complete_xyA
+				printf("\tAdding point: (%d, %d)\n", j.x, j.y);
+				
+			}
 		}
 
 			//	if (name == "\"abc2\"") {
@@ -89,12 +114,8 @@ struct Structure {
 			//	}
 
 		if (current_structure.hasSref) {
-			if (name == "\"abc2\"") {
-				printf("HELLLLOOOO\n");
-			}
-		
 			for (int i = 0; i < current_structure._references.size(); i++) {
-				if (name == "\"abc2\"") {
+				if (DEBUG) {
 					printf("printing structure: %s\n", current_structure._name.data());
 				}
 				expandReferences(current_structure._references[i].name,
@@ -179,7 +200,7 @@ struct Structure {
 			Points edge_end = poly_points[i+1];
 			if ((pcheck.x == edge_end.x) && (pcheck.y == edge_end.y)) { // corner
 				//printf("corner\n");
-				printf("ON CORNER!: %d, %d\n", pcheck.x, pcheck.y);
+				//printf("ON CORNER!: %d, %d\n", pcheck.x, pcheck.y);
 				onEdge = true;
 				return true;
 			}
@@ -190,8 +211,9 @@ struct Structure {
 				//printf("pcheck: (%d, %d), edge_start: (%d, %d), edge_end(%d, %d) \n", pcheck.x, pcheck.y, edge_start.x, edge_start.y, edge_end.x, edge_end.y);
 				//printf("slope: %d\n", slope);
 				if (slope == 0) { // edge, horizontal
-					//printf("slope check: (%d, %d)\n", pcheck.x, pcheck.y);A
-					printf("ON EDGE!: %d, %d\n", pcheck.x, pcheck.y);
+					if (DEBUG) {
+						//printf("slope check: (%d, %d)\n", pcheck.x, pcheck.y);
+					}
 					onEdge = true;
 					return true;
 				}
@@ -201,7 +223,7 @@ struct Structure {
 				}
 			}
 			if ((((edge_end.x <= pcheck.x)  && (pcheck.x <= edge_start.x)) || ((edge_start.x <= pcheck.x) && (pcheck.x <= edge_end.x))) && (edge_end.y == pcheck.y) && (pcheck.y == edge_start.y)) {
-				printf("ON H EDGE!: pcheck (%d, %d), edge_start (%d, %d), edge_end (%d, %d)\n", pcheck.x, pcheck.y, edge_start.x, edge_start.y, edge_end.x, edge_end.y);
+				//printf("ON H EDGE!: pcheck (%d, %d), edge_start (%d, %d), edge_end (%d, %d)\n", pcheck.x, pcheck.y, edge_start.x, edge_start.y, edge_end.x, edge_end.y);
 				onEdge = true;
 				return true;
 
@@ -211,7 +233,7 @@ struct Structure {
 		return res;
 	}
 
-	bool fillPolygons() { // even-odd
+	bool fillPolygons() { // even-odd polygons
 
 		for (auto& i : g_Structures) {
 			for (auto& j : i._polygons) {
@@ -237,10 +259,181 @@ struct Structure {
 		return true;
 	}
 
-	bool darkenEdge() {
+
+	bool fillPaths(Path& currentPath, std::vector<Points> temp_poly, BoundingBox bbox) { // even-odd paths
+
+		Points pos{};
+		pos.x = bbox.left.x;
+		pos.y = bbox.bottom.y; // + and - 1 for room to breath
+			for (; pos.y <= bbox.top.y; pos.y++) {
+				for (; pos.x <= bbox.right.x; pos.x++) { // honestly could have a jump of 10 for less loopingA
+					bool onEdge = false;
+					if (evenOdd(pos, temp_poly, onEdge)) {
+						// add to _fill of the polygon
+						pos.layer = temp_poly[0].layer; // copy layer of first point in polygon
+						pos.onEdge = true; // paths are always an edge 
+						currentPath._fill.push_back(pos);
+						printf("\t\tPATH FILL: (%d, %d)\n", pos.x, pos.y);
+					}
+				}
+				pos.x = bbox.left.x; // RESET X BACK TO LEFT
+			}
+		return true;
+	}
+
+	float slope(Points p1, Points p2) {
+		float x1 = p1.x;
+		float x2 = p2.x;
+		float y1 = p1.y;
+		float y2 = p2.y;
+		if (x2 - x1 != 0) {
+			return ((y2 - y1) / (x2 - x1)); // y2-y1 / x2-x1
+		}
+		return FLT_MAX; // undefined
+	}
+
+	std::tuple<Points, Points, int, int> pointsGivenSlopeAndDistance(Points origin, float slope, int distance) {
+		// returns new points with midpoint width across
+		// recall: this slope is the negated 1/x of the origin slope
+		// alg borrowed  from: https://www.geeksforgeeks.org/find-points-at-a-given-distance-on-a-line-of-given-slope/
+		Points end1, end2;
+		end1.layer = origin.layer;
+		end2.layer = origin.layer;
+		int dx_r;
+		int dy_r;
+
+		// slope is 0, horizonatal
+		if (slope == 0) {
+			dx_r = distance;
+			dy_r = 0;
+			end1.x = origin.x + dx_r;
+			end1.y = origin.y; // y is static
+			end2.x = origin.x - dx_r;
+			end2.y = origin.y;
+		}
+
+		// verticle line
+		else if (slope == FLT_MAX) {
+			dx_r = 0;
+			dy_r = distance;
+			end1.x = origin.x; // x is static 
+			end1.y = origin.y + distance;
+			end2.x = origin.x;
+			end2.y = origin.y - distance;
+		}
+		else { 
+			float dx = (distance / sqrt(1 + (slope * slope)));
+			float dy = slope * dx;
+			dx_r = std::round(dx);
+			dy_r = std::round(dy);
+			end1.x = origin.x + dx_r;
+			end1.y = origin.y + dy_r;
+			end2.x = origin.x - dx_r;
+			end2.y = origin.y - dy_r;
+		
+		}
+
+		if (DEBUG) {
+			std::printf("Origin: (%d, %d), Width: (%d), New Points: (%d, %d), (%d, %d)\n", origin.x, origin.y, distance, end1.x, end1.y, end2.x, end2.y);
+		}
+		std::tuple<Points, Points, int, int> temp = std::make_tuple(end1, end2, dx_r, dy_r);
+		return temp;
+
+	}
+
+	float negateSlope(float slope) {
+		float new_slope;
+		if (slope == FLT_MAX) {
+			new_slope = 0;
+		}
+		else if (slope == 0) {
+			new_slope = FLT_MAX;
+		}
+		else {
+			new_slope = -1 * (1 / slope);
+		}
+		return new_slope;
+	}
+
+	bool handlePaths() {
+		for (auto& i : g_Structures) {
+			for (auto& j : i._paths) {
+				printf("size: %d\n", j._xy.size());
+				for (int i = 0; i < j._xy.size()-1; i++) {
+
+					float s = slope(j._xy[i], j._xy[i + 1]);
+					// Negative reciprocal slope
+
+					float nr_slope = negateSlope(s);
+					if (DEBUG) {
+						printf("NR slope: %f\n", nr_slope);
+					}
+					std::tuple<Points, Points, int, int> topPairWithWidthAndDXDY = pointsGivenSlopeAndDistance(j._xy[i], nr_slope, j._width / 2);
+					int dx = std::get<2>(topPairWithWidthAndDXDY);
+					int dy = std::get<3>(topPairWithWidthAndDXDY);
+
+					Points corner1 = std::get<0>(topPairWithWidthAndDXDY);
+					Points corner2 = std::get<1>(topPairWithWidthAndDXDY);
+					Points corner3 = j._xy[i + 1];
+					corner3.x -= dx;
+					corner3.y -= dy;
+					Points corner4 = j._xy[i + 1];
+					corner4.x += dx;
+					corner4.y += dy;
+
+					if (DEBUG) {
+						printf("corner1: (%d, %d), corner2: (%d, %d), corner3: (%d, %d), corner4: (%d, %d)\n", 
+							corner1.x, corner1.y, corner2.x, corner2.y, corner3.x, corner3.y, corner4.x, corner4.y);
+					}
+
+					std::vector<Points> temp_poly{ corner1, corner2, corner3, corner4, corner1 }; //end at same point
+					BoundingBox bbox;
+
+					Points current_top = { 0 , INT_MIN };
+					Points current_bottom = { 0, INT_MAX };
+					Points current_left = { INT_MAX, 0 };
+					Points current_right = { INT_MIN, 0 }; // though we are only ever checking the x of right and left, and the y of top and bottom
+					//printf("J::: %d\n", i.complete_xy[0].x);
+					for (auto k : temp_poly) {
+						if (k.y > current_top.y) {
+							current_top = k;
+						}
+						if (k.y < current_bottom.y) {
+							current_bottom = k;
+						}
+						if (k.x < current_left.x) {
+							current_left = k;
+						}
+						if (k.x > current_right.x) {
+							current_right = k;
+						}
+					}
+
+					bbox.top = current_top;
+					bbox.bottom = current_bottom;
+					bbox.left= current_left;
+					bbox.right = current_right;
+					
+					for (auto& i : g_Structures) {
+						for (auto& j : i._paths) {
+							bool res = fillPaths(j, temp_poly, bbox);
+							printf("filling: %d, %d\n", j._fill[0].x, j._fill[0].y);
+						}
+					}
+						// fill _fill
+				}
+			}
+		}
+		// inverse slope
+		return true;
+	}
+
+
+	// This is currently unused, edge darkening happens in EvenOdd alg, works with non-axis aligned shapes, but this one is axis-aligned
+/*	bool darkenEdge() {
 		for (auto& i : g_Structures) {
 			for (auto& j : i._polygons) {
-				for (auto& k : j._fill) {
+				for (auto& k : j._fill) { // currently this only works because nand2 is only squares, bounding box are axis-aligned
 					if ((k.x == j._bounding_box.left.x) ||
 						(k.x == j._bounding_box.right.x) ||
 						(k.y == j._bounding_box.top.y) ||
@@ -255,7 +448,7 @@ struct Structure {
 			}
 		}
 		return true;
-	}
+	} */
 
 	bool adjustToCorner(int low, int left) { // index requires 0,0,0 at corner, add the world space bottom.y and left.x to all xy in complete_xy
 		if (low > 0 && left > 0) { // all xy are positive, need to subtract to get to origin
@@ -298,11 +491,14 @@ struct Structure {
 
 			in.getline(key, 512, ':');
 			if (strcmp(key, "STRNAME") == 0) { // then we are beginning a new structure
-				printf("Beginning new Structure\n");
+				if (DEBUG) {
+					printf("Beginning new Structure\n");
+				}
 				char name[512];
 				in >> name;
-				printf("%s\n", name);
-
+				if (DEBUG) {
+					printf("%s\n", name);
+				}
 				Structure new_structure{};
 				new_structure._name = name;
 				g_Structures.push_back(new_structure);
@@ -317,76 +513,167 @@ struct Structure {
 					temp_stream.getline(key, 512, ':');
 
 					if (strcmp(key, "SNAME") == 0) { // SNAME (reference)
-					printf("\tFound Reference: \n");
-					Points xy{};
-					References ref{};
-
-					g_Structures[struct_index].hasSref = true;
-
-					temp_stream >> ref.name;
-					printf("\tref name: %s", ref.name.data());
-
-					g_Structures[index_map[ref.name]].referenceMask = true; // if a structure is reference, mask is true
-
-					file.getline(lineBuffer, 512); // gets new line into lineBuffer
-					std::istringstream temp_stream_sname(lineBuffer); // make new istringstream on lineBuffer
-					temp_stream_sname.getline(key, 512, ':');
-
-					char ctemp1, ctemp2; // this absorbs the ',' after each value
-					temp_stream_sname >> xy.x >> ctemp1 >> xy.y >> ctemp2; // reference offsets
-					xy.x /= DIV;
-					xy.y /= DIV;
-					printf("\tpoints: %d, %d\n", xy.x, xy.y);
-					ref.xy = xy;
-
-					g_Structures[struct_index]._references.push_back(ref);
-
-					
-					}
-					if (strcmp(key, "BOUNDARY") == 0) { // BOUNDARY (polygon)
-					printf("\tFound Polygon: \n");
-					Polygon new_poly{};
-					Points xy{};
-					g_Structures[struct_index]._polygons.push_back(new_poly);
-					int poly_index = g_Structures[struct_index]._polygons.size() - 1;
-					file.getline(lineBuffer, 512); // gets new line into lineBuffer
-					std::istringstream temp_stream_boundary(lineBuffer); // make new istringstream on lineBuffer
-					temp_stream_boundary.getline(key, 512, ':');
-
-					temp_stream_boundary >> xy.layer;
-					printf("\tlayer: %d\n", xy.layer);
-
-					// set lowest and highest layers
-					if (xy.layer < g_lowest_layer) {
-						g_lowest_layer = xy.layer;
-					}
-					if (xy.layer > g_highest_layer) {
-						g_highest_layer = xy.layer;
-					}
-
-					file.getline(lineBuffer, 512); // skipping the datatype line
-
-					file.getline(lineBuffer, 512); // XY line
-					std::istringstream temp_stream_xy(lineBuffer); // make new istringstream on lineBuffer
-					temp_stream_xy.getline(key, 512, ':');
-					
-					if (strcmp(key, "XY") == 0) {
-						while (temp_stream_xy) {
-							char ctemp1, ctemp2;
-							temp_stream_xy >> xy.x >> ctemp1 >> xy.y >> ctemp2;
-							xy.x /= DIV;
-							xy.y /= DIV;
-							xy.onEdge = true; // this gets overwritten by fill :(
-							g_Structures[struct_index]._polygons[poly_index].xy_pos.push_back(xy);
+						if (DEBUG) {
+							printf("\tFound Reference: \n");
 						}
-					}
-					printf("\txy: ");
-					for (auto i : g_Structures[struct_index]._polygons[poly_index].xy_pos) {
-						printf("(%d, %d), ", i.x, i.y);
-					}
-					printf("\n");
+						Points xy{};
+						References ref{};
+							
+						g_Structures[struct_index].hasSref = true;
+
+						temp_stream >> ref.name;
+						if (DEBUG) {
+							printf("\tref name: %s", ref.name.data());
+						}
+
+						g_Structures[index_map[ref.name]].referenceMask = true; // if a structure is reference, mask is true
+
+						file.getline(lineBuffer, 512); // gets new line into lineBuffer
+						std::istringstream temp_stream_sname(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_sname.getline(key, 512, ':');
+
+						char ctemp1, ctemp2; // this absorbs the ',' after each value
+						temp_stream_sname >> xy.x >> ctemp1 >> xy.y >> ctemp2; // reference offsets
+						xy.x /= DIV;
+						xy.y /= DIV;
+						if (DEBUG) {
+							printf("\tpoints: %d, %d\n", xy.x, xy.y);
+						}
+						ref.xy = xy;
+
+						g_Structures[struct_index]._references.push_back(ref);
+
+				
+					} // SNAME (REFERENCE)
+					if (strcmp(key, "BOUNDARY") == 0) { // BOUNDARY (polygon)
+						if (DEBUG) {
+							printf("\tFound Polygon: \n");
+						}
+						Polygon new_poly{};
+						Points xy{};
+						g_Structures[struct_index]._polygons.push_back(new_poly);
+						int poly_index = g_Structures[struct_index]._polygons.size() - 1; 
+						file.getline(lineBuffer, 512); // gets new line into lineBuffer
+						std::istringstream temp_stream_boundary(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_boundary.getline(key, 512, ':');
+	
+						temp_stream_boundary >> xy.layer;
+						if (DEBUG) {
+							printf("\tlayer: %d\n", xy.layer);
+						}
+	
+						// set lowest and highest layers
+						if (xy.layer < g_lowest_layer) {
+							g_lowest_layer = xy.layer;
+						}
+						if (xy.layer > g_highest_layer) {
+							g_highest_layer = xy.layer;
+						}
+	
+						file.getline(lineBuffer, 512); // skipping the datatype line
+	
+						file.getline(lineBuffer, 512); // XY line
+						std::istringstream temp_stream_xy(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_xy.getline(key, 512, ':');
+						
+						if (strcmp(key, "XY") == 0) {
+							while (temp_stream_xy) {
+								char ctemp1, ctemp2;
+								temp_stream_xy >> xy.x >> ctemp1 >> xy.y >> ctemp2;
+								xy.x /= DIV;
+								xy.y /= DIV;
+								xy.onEdge = true; // this gets overwritten by fill :(
+								g_Structures[struct_index]._polygons[poly_index].xy_pos.push_back(xy);
+							}
+						}
+						if (DEBUG) {
+							printf("\txy: ");
+							for (auto i : g_Structures[struct_index]._polygons[poly_index].xy_pos) {
+								printf("(%d, %d), ", i.x, i.y);
+						}
+						printf("\n");
+						}
 					
-					}
+					} // BOUNDARY
+					if (strcmp(key, "PATH") == 0) { // PATH
+						if (DEBUG) {
+							printf("\tFound Path: \n");
+						}
+						Path new_path{};
+						Points xy{};
+						bool skip = false; // PATH_TYPE is optional and sometimes skipped
+
+						file.getline(lineBuffer, 512); // gets new line into lineBuffer
+						std::istringstream temp_stream_pathlayer(lineBuffer); // make new istringstream on lineBuffer
+
+						temp_stream_pathlayer.getline(key, 512, ':');
+	
+						temp_stream_pathlayer >> xy.layer;
+						if (DEBUG) {
+							printf("\tlayer: %d\n", xy.layer);
+						}
+	
+						file.getline(lineBuffer, 512); // skipping the datatype line
+						std::istringstream temp_stream_datatype(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_datatype.getline(key, 512, ':');
+
+						if (strcmp(key, "DATATYPE") == 0) {
+							// do nothing
+						}
+						
+						file.getline(lineBuffer, 512); // pathtype line
+						std::istringstream temp_stream_pathtype(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_pathtype.getline(key, 512, ':');
+
+						if (strcmp(key, "PATHTYPE") == 0) {
+							temp_stream_pathtype >> new_path._pathtype;
+							if (DEBUG) {
+								printf("\tpathtype: %d\n", new_path._pathtype);
+							}
+						}
+
+						file.getline(lineBuffer, 512); // width line
+						std::istringstream temp_stream_width(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_width.getline(key, 512, ':');
+
+						if (strcmp(key, "WIDTH") == 0) {
+							int temp_width;
+							temp_stream_width >> temp_width;
+							temp_width /= DIV; // apply div
+							new_path._width = temp_width;
+							if (DEBUG) {
+								printf("\twidth: %d\n", new_path._width);
+							}
+						}
+	
+						g_Structures[struct_index]._paths.push_back(new_path);
+						int path_index = g_Structures[struct_index]._paths.size() - 1; 
+
+
+						file.getline(lineBuffer, 512); // XY line
+						std::istringstream temp_stream_xy(lineBuffer); // make new istringstream on lineBuffer
+						temp_stream_xy.getline(key, 512, ':');
+						
+						if (strcmp(key, "XY") == 0) {
+							while (temp_stream_xy) {
+								char ctemp1, ctemp2;
+								temp_stream_xy >> xy.x >> ctemp1 >> xy.y >> ctemp2;
+								xy.x /= DIV;
+								xy.y /= DIV;
+								xy.onEdge = true; // this gets overwritten by fill :(
+								g_Structures[struct_index]._paths[path_index]._xy.push_back(xy);
+							}
+						}
+						if (DEBUG) {
+							printf("\txy: ");
+							for (auto i : g_Structures[struct_index]._paths[path_index]._xy) {
+								printf("(%d, %d), ", i.x, i.y);
+						}
+						printf("\n");
+						}
+
+					
+					} // PATH
 				}
 
 			}
@@ -411,7 +698,8 @@ struct Structure {
 				int random = rand() % 1000 + 100;
 				for (auto j : i.complete_xy) {
 					if (j.onEdge) {
-						world[j.layer][j.y][j.x] = j.layer * 2 +500; // make edges extra visible
+						//world[j.layer][j.y][j.x] = j.layer * 2 +500; // make edges extra visible
+						world[j.layer][j.y][j.x] = 1; // make edges extra visible
 					}
 					else {
 						//world[j.layer][j.y][j.x] = j.layer;
@@ -456,6 +744,13 @@ int main(){
 
 //	res = darkenEdges(); still working on this
 
+	//PATHS
+	printf("pre\n");
+	res = handlePaths();
+	printf("post\n");
+	// end PATHS
+
+
 	for (int i = 0; i < g_Structures.size(); i++) {
 		res = expandReferences(g_Structures[i]._name, 0, 0, g_Structures[i].complete_xy);
 	}
@@ -496,6 +791,14 @@ int main(){
 	printf("size of world: %d, %d, %d\n", x, y, z);
 	//std::vector < std::vector< std::vector < int > > > world (x, std::vector<std::vector<int>>(y, std::vector<int>(z)));
 	std::vector < std::vector< std::vector < int > > > world (z, std::vector<std::vector<int>>(y, std::vector<int>(x)));
+
+	/*
+	//PATHS
+	printf("pre\n");
+	res = handlePaths();
+	printf("post\n");
+	// end PATHS
+	*/
 
 	res = setTheWorldVector(world, x, y);
 
